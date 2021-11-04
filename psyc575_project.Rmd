@@ -1,0 +1,61 @@
+---
+title: "Analyses"
+author: "Jackson Trager"
+date: "11/3/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Libraries
+
+```{r cars}
+library(haven)
+library(lme4)
+library(dplyr)
+library(modelsummary)
+library(ggplot2)
+library(jtools)
+library(lmerTest)
+```
+
+## Import Data
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+df_raw <- read_xlsx("Data Files/Morality_Wealth_Data.xlsx") 
+
+df <- df_raw %>% mutate(age = as.numeric(age), moneymoral = as.numeric(moneymoral)) %>% group_by(country) %>% 
+                    mutate(age_cm = mean(age, na.rm = T), eq_cm = mean(EQUALITY_tot, na.rm = T)) %>% 
+                      ungroup() %>% 
+                        mutate(age_cmc = age - age_cm, eq_cmc = EQUALITY_tot - eq_cm)
+```
+
+## Models
+
+Model Equation:
+
+$$ $$
+
+```{r}
+m1 <- lmer(moneymoral ~ `Gini Coefficient` + eq_cmc + eq_cm + (1|country), df)
+summary(m1)
+
+# m0 <- lmer(moneymoral ~ 1 + (age_cmc|country), df)
+# summary(m0)
+```
+
+```{r table1}
+msummary(m1)
+```
+
+## Plots
+
+```{r}
+effect_plot(m1, pred="Gini Coefficient")
+```
+
+The model analysis /table shows that for level 1 we have a fixed effect for equality (cmc) at .31 (SE .017). On level 2, we have two fixed effects for for Gini Coefficient at -.017 (SE .008) and for equality (country mean) at 0.3 (SE=0.2). All fixed effects were significant (p<0.05) with the exception of equality (country mean). Furthermore, the mean moralisation of money varies over country by 0.07 (random intercept). The model did not converge for random slopes which is why there are excluded for now.
