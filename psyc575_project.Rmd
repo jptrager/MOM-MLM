@@ -36,9 +36,9 @@ df <- df_raw %>% mutate(age = as.numeric(age), moneymoral = as.numeric(moneymora
 
 ## Models
 
-Model Equation:
+Model Equation: 
 
-$$ $$
+$$money moral_{ij} = \gamma_{00} + \gamma_{01}*gini_j + \gamma_{02} + equality^{cm}_j + \gamma_{10} + equality^{cmc}_{ij}$$
 
 ```{r}
 m1 <- lmer(moneymoral ~ `Gini Coefficient` + eq_cmc + eq_cm + (1|country), df)
