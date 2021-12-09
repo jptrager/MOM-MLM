@@ -1,0 +1,277 @@
+---
+title: "Morality_Money_P575_Project_Trager"
+author: "Jackson Trager"
+date: "12/8/2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Libraries
+
+```{r }
+library(haven)
+library(lme4)
+library(dplyr)
+library(modelsummary)
+library(ggplot2)
+library(sjPlot)
+library(jtools)
+library(lmerTest)
+library(tidyverse)
+library(readxl)
+```
+
+## Import and Mutate Data
+
+## mutate age, money moral, and political orientation to numeric values
+#Create Cluster Means to show between country effects and Cluster Mean Centered for within country effects (All 8 DVs)
+
+```{r pressure, echo=FALSE}
+
+df_raw <- read_xlsx("Data Files/Morality_Wealth_Data.xlsx") 
+
+df <- df_raw %>% mutate(age = as.numeric(age), 
+                        moneymoral = as.numeric(moneymoral), moneymoral = moneymoral-15, 
+                        porient_1 = as.numeric(porient_1), religiosity_1 = as.numeric(religiosity_1))%>% group_by(country)%>% 
+                    mutate(age_cm = mean(age, na.rm = T), po_cm = mean(porient_1, na.rm = T), rel_cm = mean(religiosity_1, na.rm = T),care_cm = mean(CARE_tot, na.rm = T), eq_cm = mean(EQUALITY_tot, na.rm = T), prop_cm = mean(PROPORTIONALITY_tot, na.rm = T), loy_cm = mean(LOYALTY_tot, na.rm = T), auth_cm = mean(AUTHORITY_tot, na.rm = T), pur_cm = mean(PURITY_tot, na.rm = T),) %>% 
+                      ungroup() %>% 
+                        mutate(age_cmc = age - age_cm, po_cmc = porient_1 - po_cm, rel_cmc = religiosity_1 - rel_cm, care_cmc = CARE_tot - care_cm, eq_cmc = EQUALITY_tot - eq_cm, prop_cmc = PROPORTIONALITY_tot - prop_cm, loy_cmc = LOYALTY_tot - loy_cm, auth_cmc = AUTHORITY_tot - auth_cm, pur_cmc = PURITY_tot - pur_cm)
+
+```
+
+## Model Design
+
+
+##Random Intercept Model for the moralization of excessive wealth across 19 countries. 
+
+```{r}
+ran_int <- lmer(moneymoral ~ 1 + (1 | country), data = df)
+summary(ran_int)
+```
+
+#Check ICC
+```{r}
+variance_components <- as.data.frame(VarCorr(ran_int))
+between_var <- variance_components$vcov[1]
+within_var <- variance_components$vcov[2]
+(icc <- between_var / (between_var + within_var))
+```
+#ICC is 0.08 which is close enough to the threshold in the class of .1 to conduct a multilevel model. 
+
+#Next we tested for random slopes on all foundations:
+ 
+
+```{r Random Slope test}
+m_RS_care <- lmer(moneymoral ~ care_cmc + eq_cmc + prop_cmc + loy_cmc + auth_cmc+  pur_cmc + (care_cmc  |country), df)
+ranova(m_RS_care)
+
+m_RS_eq <- lmer(moneymoral ~ care_cmc + eq_cmc + prop_cmc + loy_cmc + auth_cmc+  pur_cmc + (eq_cmc  |country), df)
+ranova(m_RS_eq)
+
+m_RS_prop <- lmer(moneymoral ~ care_cmc + eq_cmc + prop_cmc + loy_cmc + auth_cmc+  pur_cmc + (prop_cmc  |country), df)
+ranova(m_RS_prop)
+
+m_RS_loy <- lmer(moneymoral ~ care_cmc + eq_cmc + prop_cmc + loy_cmc + auth_cmc+  pur_cmc + (loy_cmc  |country), df)
+ranova(m_RS_loy)
+
+m_RS_auth <- lmer(moneymoral ~ care_cmc + eq_cmc + prop_cmc + loy_cmc + auth_cmc+  pur_cmc + (auth_cmc  |country), df)
+ranova(m_RS_auth)
+
+m_RS_pur <- lmer(moneymoral ~ care_cmc + eq_cmc + prop_cmc + loy_cmc + auth_cmc+  pur_cmc + (pur_cmc  |country), df)
+ranova(m_RS_pur)
+```
+
+## All 6 foundations look to be statistically significant. Due to the large amount of variables I decided to include only the most relevant random slopes in my final model. To find the most relevant, I first created a model with all predictors and all random slopes.   
+## Model with eq_cmc + pur_cmc + care_cmc + prop_cmc + auth_cmc +loy_cmc added as random slopes. 
+
+```{r}
+m1 <- lmer(moneymoral ~ `Gini Coefficient` + + `Economic Freedom` + age_cm + age_cmc + po_cm + po_cmc + +rel_cm + rel_cmc + care_cm + care_cmc + eq_cm + eq_cmc + prop_cm + prop_cmc + loy_cm + loy_cmc + auth_cm + auth_cmc + pur_cm + pur_cmc + (eq_cmc + pur_cmc + care_cmc + prop_cmc + auth_cmc + loy_cmc|country), df)
+summary(m1)
+msummary(m1)
+
+```
+
+## I then checked the random slope significance of the above model which included all random slopes together - m2
+
+```{r}
+ranova(m1)
+```
+
+## Loyalty was the least significant at 1.0 and so I created a model and removed loyalty as a random slope
+
+
+```{r}
+m2_no_loyrs<- lmer(moneymoral ~ `Gini Coefficient` + + `Economic Freedom` + age_cm + age_cmc + po_cm + po_cmc + +rel_cm + rel_cmc + care_cm + care_cmc + eq_cm + eq_cmc + prop_cm + prop_cmc + loy_cm + loy_cmc + auth_cm + auth_cmc + pur_cm + pur_cmc + (eq_cmc + pur_cmc + care_cmc + prop_cmc + auth_cmc |country), df)
+summary(m2_no_loyrs)
+msummary(m2_no_loyrs)
+```
+
+## I then checked the random slope significance of the new model m_no_loyrs
+
+```{r}
+ranova(m2_no_loyrs)
+```
+
+
+## Proportionality is now the least significant at 0.7 so I created a new model and excluded proportionality_cmc
+
+
+```{r}
+m3_no_proprs <- lmer(moneymoral ~ `Gini Coefficient` + + `Economic Freedom` + age_cm + age_cmc + po_cm + po_cmc + +rel_cm + rel_cmc + care_cm + care_cmc + eq_cm + eq_cmc + prop_cm + prop_cmc + loy_cm + loy_cmc + auth_cm + auth_cmc + pur_cm + pur_cmc + (eq_cmc + pur_cmc + care_cmc + auth_cmc |country), df)
+summary(m3_no_proprs)
+msummary(m3_no_proprs)
+```
+
+## I then checked the random slope significance of the new model (m_no_proprs) 
+
+```{r}
+ranova(m3_no_proprs)
+```
+## Care_cmc is now significant along with eq_cmc and pue_cmc. auth_cm is not significant at 0.13. This is close to the threshold of removal at .1 that Mark recommended. 
+
+## Playing it conservatively, I created a neew model excluding auth_cmc
+
+```{r}
+m4_no_authrs <- lmer(moneymoral ~ `Gini Coefficient` + + `Economic Freedom` + age_cm + age_cmc + po_cm + po_cmc + +rel_cm + rel_cmc + care_cm + care_cmc + eq_cm + eq_cmc + prop_cm + prop_cmc + loy_cm + loy_cmc + auth_cm + auth_cmc + pur_cm + pur_cmc + (eq_cmc + pur_cmc + care_cmc |country), df)
+summary(m4_no_authrs)
+msummary(m4_no_authrs)
+```
+
+## I then checked the random slopes significant for the new model (m_RS_3)
+
+```{r}
+ranova(m4_no_authrs)
+```
+# All random slopes remain significant though they all reduce in their significance to a degree. 
+
+
+## I will now start testing for interaction effects. In reference to my research question the most important theoretical interactions are between gini coefficient and moral foundations as the surrounding level of inequality may interact with ones moral endorsements relevant to the moralization of that inequality. This next model will build off of the above model which includes all predictors and three random slopes (eq_cmc, care_cmc, pur_cmc) and add an interaction variable of Gini coefficient and Eq_cmc (the most intuitive relationship)
+
+```{r}
+m5_int1 <- lmer(moneymoral ~ `Gini Coefficient` + + `Economic Freedom` + age_cm + age_cmc + po_cm + po_cmc + +rel_cm + rel_cmc + care_cm + care_cmc + eq_cm + eq_cmc + prop_cm + prop_cmc + loy_cm + loy_cmc + auth_cm + auth_cmc + pur_cm + pur_cmc + (`Gini Coefficient`*eq_cmc) + (eq_cmc + pur_cmc + care_cmc |country), df)
+summary(m5_int1)
+msummary(m5_int1)
+```
+## The interaction of Gini Coefficient and eq_cm is slighlty signifcant at .061
+
+##Encouraged that this model converged, I decided to create a final model adding an interaction variable for Gini coefficient and every moral foundation. 
+
+```{r}
+Final_Model <- lmer(moneymoral ~ `Gini Coefficient` + + `Economic Freedom` + age_cm + age_cmc + po_cm + po_cmc + +rel_cm + rel_cmc + care_cm + care_cmc + eq_cm + eq_cmc + prop_cm + prop_cmc + loy_cm + loy_cmc + auth_cm + auth_cmc + pur_cm + pur_cmc + (`Gini Coefficient`*eq_cmc) + (`Gini Coefficient`*care_cmc) + (`Gini Coefficient`*prop_cmc) +  (`Gini Coefficient`*loy_cmc) + (`Gini Coefficient`*auth_cmc) + (`Gini Coefficient`*pur_cmc) + (eq_cmc + pur_cmc + care_cmc |country), df)
+summary(Final_Model)
+msummary(Final_Model)
+```
+
+## Relevant to our hypotheses, neither gini ceofficient nor economic freedom significantly predict the moralization of excessive wealth. No other level 2 (country level)variables were significant either. At level-1, age_cmc, eq_cmc, and pur_cmc all positively predict the moralization of excessive wealth significantly. po_cmc and auth_cmc were both negatively associated with moralization of excessive wealth significantly. In terms of interactions, 3 showed to be significant (gini X eqcmc, gini x auth.cmc, and gini X pur.cmc ). The rest of the variables were not significant. Furthermore, the mean moralization of money varies over country by 2.554 XXX (random intercept). 
+
+## The Final Model Equation
+
+$$moneymoral_{ij} = \gamma_{00} + \gamma_{01}*gini_j + \gamma_{02}*ef_j + \gamma_{03} * age^{cm}_j + 
+\gamma_{04} * po^{cm}_j + \gamma_{05} * care^{cm}_j + \gamma_{06}*eq^{cm}_j \\
++ \gamma_{07} * prop^{cm}_j + \gamma_{08} * loy^{cm}_j + \gamma_{09} * auth^{cm}_j + \gamma_{010} * pur^{cm}_j + \gamma_{10}* age^{cmc}_{ij} + \gamma_{20} * po^{cmc}_{ij} \\
++ (\gamma_{30} + u_{3j})*care^{cmc}_{ij} +(\gamma_{40} + u_{4j})* eq^{cmc}_{ij} + \gamma_{50} * prop^{cmc}_{ij} + \gamma_{60} * loyalty^{cmc}_{ij} + \gamma_{70} * auth^{cmc}_{ij} \\
++ (\gamma_{80} + u_{8j}) * pur^{cmc}_{ij} + \gamma_{31} * gini_j*care^{cmc}_{ij} + \gamma_{41} * gini_j*eq^{cmc}_{ij} + \gamma_{51} * gini_j*prop^{cmc}_{ij} \\
++ \gamma_{61} * gini_j*loy^{cmc}_{ij} +\gamma_{71} * gini_j*auth^{cmc}_{ij} + \gamma_{81} * gini_j*pur^{cmc}_{ij} + e_{ij} + u_{0j} 
+
+$$
+
+# Recheck Random Slopes for Int_6
+
+```{r}
+ranova(Final_Model)
+```
+
+#The results come back with Pur_cmc is no longer significant? 
+
+#Recheck ICC
+#Check ICC
+```{r}
+variance_components <- as.data.frame(VarCorr(Final_Model))
+between_var <- variance_components$vcov[1]
+within_var <- variance_components$vcov[2]
+(icc <- between_var / (between_var + within_var))
+```
+#ICC is 0.818 which is very high.
+
+
+
+Things to report: 
+1. Sample sizes - 3902 observations from 19 countries
+2. Model equations
+3. Decisions and justifications for including or not including cluster means, centering, an  random slopes
+4. Estimation methods, software program/package, and version number
+5. Intraclass correlation
+6. Convergence issues and handling
+7. Assumptions
+8. Tables of fixed and random effect
+9. coefficients
+10. Effect size
+11. Model comparison criteria and indicesx
+12. Software code
+
+
+## Plots 
+
+```{r}
+#install.packages("glmmTMB")
+#plot_model(m_RS_3_Int_1, type = "re", terms = "eq_cmc")
+```
+
+
+##Figure 1: Bar Chart for Gini Coefficient across countries
+```{r}
+ 
+df %>% distinct(country, .keep_all = T) %>% ggplot(aes( y = `Gini Coefficient`, x=country)) + geom_bar(stat="identity") + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+
+```
+
+##Figure 2 : A table with descriptive statistics
+```{r}
+df %>% group_by(age) %>% summarise(mean=mean(value), sd=sd(value))
+
+```
+
+##Figure 3 : Bar chart of moralization of excessive wealth across countries
+
+```{r}
+
+ggplot(df, aes( y = moneymoral, x=country)) + geom_bar(stat = "summary", fun.y = "mean") + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+
+
+```
+##Figure 4 : Scatter plot with moralization of excessive wealth on the y axis and eq_cmc on x axis and include the country level random slopes
+
+```{r}
+ggplot(df, aes(x=eq_cmc, y=moneymoral, group=country)) +
+  stat_smooth(method="lm", se=FALSE, size=.5, color="springgreen" ) + 
+  stat_smooth(aes(group=1), method="lm", color="blue", size=1.5) 
+```
+##Figure 5 :  Scatter plot with moralization of excessive wealth on the y axis and all 6 foudations on the x axis 
+
+```{r}
+ggplot(df) + 
+  geom_smooth(aes(care_cmc,moneymoral), method=lm, se=FALSE, color="red") +
+  geom_smooth(aes(eq_cmc,moneymoral), method=lm, se=FALSE, color="blue") +
+  geom_smooth(aes(prop_cmc,moneymoral), method=lm, se=FALSE, color="green") +
+  geom_smooth(aes(loy_cmc,moneymoral), method=lm, se=FALSE, color="yellow") +
+  geom_smooth(aes(auth_cmc,moneymoral), method=lm, se=FALSE, color="orange") +
+  geom_smooth(aes(pur_cmc,moneymoral), method=lm, se=FALSE, color="purple") +
+  labs(x = "Moral Foundation Endorsement", y = "Moralization of Excessive Wealth")
+```
+
+## Figure 6: Table comparing models and their coeffeicients
+
+
+
+```{r}
+df  %>% group_by(country) %>% 
+summarise(n=n())
+```
+
